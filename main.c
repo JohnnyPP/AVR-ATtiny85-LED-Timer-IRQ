@@ -11,6 +11,9 @@
 
 #define TCCR0B (*(volatile uint8_t *)((0x33) + 0x20))
 
+// To obtain 1 second period on ATtiny85 with default internal 1 Mhz clock
+// The 256 prescaler was used with total overflows of 15 and 66 additional ticks
+
 // global variable to count the number of overflows
 volatile uint8_t tot_overflow;
 
@@ -53,10 +56,10 @@ int main(void)
     while(1)
     {
         // check if no. of overflows = 12
-        if (tot_overflow >= 12)  // NOTE: '>=' is used
+        if (tot_overflow >= 15)  // NOTE: '>=' is used
         {
             // check if the timer count reaches 53
-            if (TCNT0 >= 53)
+            if (TCNT0 >= 66)
             {
                 PORTB ^= (1 << PINB3);    // toggles the led
                 TCNT0 = 0;            // reset counter
