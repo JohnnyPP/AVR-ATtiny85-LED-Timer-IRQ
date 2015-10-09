@@ -11,14 +11,15 @@
 
 #define TCCR0B (*(volatile uint8_t *)((0x33) + 0x20))
 
-// To obtain 1 second period on ATtiny85 with default internal 1 Mhz clock
-// The 256 prescaler was used with total overflows of 15 and 66 additional ticks
+// To obtain 0.5 second period on ATtiny85 with default internal 1 Mhz clock
+// The 256 prescaler was used with total overflows of 7 and 161 additional ticks
+// For calculations use: http://eleccelerator.com/avr-timer-calculator/
 
 // global variable to count the number of overflows
-volatile uint8_t tot_overflow;
+volatile uint8_t overflowCount;
 
 // initialize timer, interrupt and variable
-void timer0_init()
+void timer0Initialization()
 {
     // set up timer with prescaler = 256
 	TCCR0B |= (1 << CS02);
@@ -33,7 +34,7 @@ void timer0_init()
     sei();
 
     // initialize overflow counter variable
-    tot_overflow = 0;
+    overflowCount = 0;
 }
 
 // TIMER0 overflow interrupt service routine
@@ -41,7 +42,7 @@ void timer0_init()
 ISR(TIMER0_OVF_vect)
 {
     // keep a track of number of overflows
-    tot_overflow++;
+	overflowCount++;
 }
 
 int main(void)
@@ -50,20 +51,18 @@ int main(void)
     DDRB |= (1 << PINB3);
 
     // initialize timer
-     timer0_init();
+    timer0Initialization();
 
     // loop forever
     while(1)
     {
-        // check if no. of overflows = 12
-        if (tot_overflow >= 15)  // NOTE: '>=' is used
+        if (overflowCount >= 7)
         {
-            // check if the timer count reaches 53
-            if (TCNT0 >= 66)
+            if (TCNT0 >= 161)
             {
-                PORTB ^= (1 << PINB3);    // toggles the led
-                TCNT0 = 0;            // reset counter
-                tot_overflow = 0;     // reset overflow counter
+                PORTB ^= (1 << PINB3);    	// toggles the LED on PC0
+                TCNT0 = 0;            		// reset timer
+                overflowCount = 0;     		// reset overflow counter
             }
         }
     }
