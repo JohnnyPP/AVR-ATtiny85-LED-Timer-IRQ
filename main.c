@@ -3,8 +3,8 @@
  *
  *  Created on: Oct 6, 2015
  *      Author: JohnnyP
- *      http://maxembedded.com/2011/06/avr-timers-timer0/ with modifications
- *      https://github.com/JohnnyPP/AVR-ATtiny85-LED-Switch
+ *      http://maxembedded.com/2011/07/avr-timers-ctc-mode/ with modifications
+ *      http://forum.arduino.cc/index.php?topic=211639.0
  *      http://eleccelerator.com/avr-timer-calculator/
  */
 
@@ -12,6 +12,11 @@
 #include <avr/interrupt.h>
 
 #define TCCR0B (*(volatile uint8_t *)((0x33) + 0x20))
+#define TCCR0A (*(volatile uint8_t *)((0x2A) + 0x20))
+#define OCR0A (*(volatile uint8_t *)((0x29) + 0x20))
+#define WGM01 1
+#define OCIE0A 4
+#define OCF0A 4
 
 // Prescaler on page 80
 /* 	CS02 	CS01 	CS00 	Description
@@ -24,80 +29,56 @@
 	1 		1 		0 		External clock source on T0 pin. Clock on falling edge.
 	1 		1		1 		External clock source on T0 pin. Clock on rising edge.*/
 
-// To obtain 0.5 second period on ATtiny85 with default internal 1 MHz clock
-// No prescaler was used with total overflows of 1953 and 32 additional ticks
-// Using prescaler decreases counter resolution.
-
-// global variable to count the number of overflows
-volatile uint16_t overflowCount;
+// Used Clear Timer on Compare Match (CTC) mode #2 page 79
+// To obtain 0.25 second period on ATtiny85 with default internal 1 MHz clock
+// 1024 prescaler was used with total counts of 244
+// Using prescaler decreases counter resolution. Because the compare value is
+// only 8 bit the maximal delay equals to 0.26 ms (without additional routine in TIMER0_COMPA_vect)
 
 // initialize timer, interrupt and variable
 void timer0Initialization()
 {
-    // set up timer without prescaler
-	TCCR0B |= (1 << CS00);
+    // set up timer with prescaler = 1024 and CTC mode
+    TCCR0B |= (1 << CS02)|(1 << CS00);
+    TCCR0A |= (1 << WGM01);
 
     // initialize counter
     TCNT0 = 0;
 
-    // enable overflow interrupt
-    TIMSK |= (1 << TOIE0);
+    // initialize compare value. This gives period of 0.25 ms
+    OCR0A = 244;
+
+    // enable compare interrupt
+    TIMSK |= (1 << OCIE0A);
 
     // enable global interrupts
     sei();
-
-    // initialize overflow counter variable
-    overflowCount = 0;
 }
 
-// TIMER0 overflow interrupt service routine
-// called whenever TCNT0 overflows
-ISR(TIMER0_OVF_vect)
+// this ISR is fired whenever a match occurs
+// hence, toggle led here itself..
+ISR (TIMER0_COMPA_vect)
 {
-    // keep a track of number of overflows
-	overflowCount++;
+    // toggle led here
+    PORTB ^= (1 << PINB3);
 }
 
 int main(void)
 {
-    // connect led to pin PC0 (Pin #2)
+    // connect led to pin PB3 (Pin #2)
     DDRB |= (1 << PINB3);
-    DDRB &= ~(1 << PINB4);		// DDRB Set pin 4 to input
-    PORTB |= 1 << PINB4;		// PORTB Set pin 4 to high
 
     // initialize timer
     timer0Initialization();
 
     while(1)
     {
-    	if(bit_is_clear(PINB, PINB4))
-    	{
-			// While the button is pressed
-    		// Period = 0.5 Hz
-    		if (overflowCount >= 1953)
-    		{
-				if (TCNT0 >= 32)
-				{
-					PORTB ^= (1 << PINB3);    	// toggles the LED on PC0 (Pin #2)
-					TCNT0 = 0;            		// reset timer
-					overflowCount = 0;     		// reset overflow counter
-				}
-    		}
-    	}
-    	else
-    	{
-    		// While the button is not pressed
-    		// Period = 4 Hz
-    		if (overflowCount >= 15625)
-    		{
-    			if (TCNT0 >= 0)
-    			{
-    				PORTB ^= (1 << PINB3);    	// toggles the LED on PC0 (Pin #2)
-    				TCNT0 = 0;            		// reset timer
-    				overflowCount = 0;     		// reset overflow counter
-    			}
-  	   		}
-    	}
+        // do nothing
+        // whenever a match occurs, ISR is fired
+        // toggle the led in the ISR itself
+        // no need to keep track of any flag bits here
+        // done!
     }
+    return 0;
 }
 
